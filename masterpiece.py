@@ -4,7 +4,7 @@ import json
 
 from midiutil.MidiFile import MIDIFile
 
-from randomnote import RandomNote
+# from randomnote import RandomNote
 
 
 class Masterpiece(object):
@@ -18,9 +18,9 @@ class Masterpiece(object):
         rules_file.close()
         self.rhythm = rules["rhythm"]
         self.seq_chord = rules["seq_chord"]
-        self.seq_perc = rules["seq_perc"]
+        self.chord_rhythm = rules["chord_rhythm"]
         self.velocity = rules["velocity"]
-        self.rn = RandomNote(rules["notes"], rules["interval_upper"], rules["interval_lower"])
+        self.notes = rules["notes"]
 
         self.MyMIDI = MIDIFile(3)
         self.current_track_number = 0
@@ -29,9 +29,8 @@ class Masterpiece(object):
         seq_melody = []
         for i in range(self.length):
             for phrase in self.rhythm:
-                self.rn.reset()
-                for duration in phrase:
-                    seq_melody.append((self.rn.random_note(), duration))
+                for note, duration in zip(self.notes, phrase):
+                    seq_melody.append((note, duration))
         return seq_melody
 
     def create_melody_track(self):
@@ -80,63 +79,19 @@ class Masterpiece(object):
             tracknum=self.current_track_number,
             channel=0, time=0, program=0)
 
-        # C  D  E  F  G  A  B  | C  D  E  F  G  A  B  | C
-        # 48 50 52 53 55 57 59 | 60 62 64 65 67 69 71 | 72
-
         pos = 0
-        while pos < self.length * 16:
-            for item in self.seq_chord:
-                for pitch in item:
-                    self.MyMIDI.addControllerEvent(
-                        track=self.current_track_number,
-                        channel=0, time=pos, controller_number=64, parameter=127)
-                    self.MyMIDI.addControllerEvent(
-                        track=self.current_track_number,
-                        channel=0, time=pos + 1.96875, controller_number=64, parameter=0)
-                    self.MyMIDI.addNote(
-                        track=self.current_track_number,
-                        channel=0, pitch=pitch, time=pos, duration=2, volume=76)
-                    self.MyMIDI.addControllerEvent(
-                        track=self.current_track_number,
-                        channel=0, time=pos + 2, controller_number=64, parameter=127)
-                    self.MyMIDI.addControllerEvent(
-                        track=self.current_track_number,
-                        channel=0, time=pos + 3.96875, controller_number=64, parameter=0)
-                    self.MyMIDI.addNote(
-                        track=self.current_track_number,
-                        channel=0, pitch=pitch, time=pos + 2, duration=2, volume=68)
-                pos += 4
-        self.current_track_number += 1
-
-    def create_perc_track(self):
-        self.MyMIDI.addTrackName(
-            track=self.current_track_number,
-            time=0, trackName="perc")
-        self.MyMIDI.addTempo(
-            track=self.current_track_number,
-            time=0, tempo=self.tempo)
-        self.MyMIDI.addProgramChange(
-            tracknum=self.current_track_number,
-            channel=9, time=0, program=0)
-
-        pos = 0
-        while pos < self.length * 16:
-            if pos != 0:
+        for chord, rhythm in zip(self.seq_chord, self.chord_rhythm):
+            for pitch in chord:
+                self.MyMIDI.addControllerEvent(
+                    track=self.current_track_number,
+                    channel=0, time=pos, controller_number=64, parameter=127)
+                self.MyMIDI.addControllerEvent(
+                    track=self.current_track_number,
+                    channel=0, time=pos + rhythm - 0.03125, controller_number=64, parameter=0)
                 self.MyMIDI.addNote(
                     track=self.current_track_number,
-                    channel=9, pitch=49, time=pos, duration=0.5, volume=102)
-            for pitch, duration in self.seq_perc:
-                relative_pos = pos - int(pos / 4) * 4
-                if 0 <= relative_pos < 1:
-                    vol = 102
-                elif 2 <= relative_pos < 3:
-                    vol = 96
-                else:
-                    vol = 92
-                self.MyMIDI.addNote(
-                    track=self.current_track_number,
-                    channel=9, pitch=pitch, time=pos, duration=duration, volume=vol)
-                pos += duration
+                    channel=0, pitch=pitch, time=pos, duration=rhythm, volume=76)
+                pos += rhythm
         self.current_track_number += 1
 
     def create_midi_file(self, filename, melody=True, chord=True, perc=True):
@@ -144,7 +99,5 @@ class Masterpiece(object):
             self.create_melody_track()
         if chord:
             self.create_chord_track()
-        if perc:
-            self.create_perc_track()
         with open(filename, "wb") as midi_file:
             self.MyMIDI.writeFile(midi_file)
